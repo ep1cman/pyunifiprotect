@@ -5,11 +5,13 @@ from __future__ import annotations
 import asyncio
 import hashlib
 from http.cookies import Morsel, SimpleCookie
+from http import cookies
 import logging
 from pathlib import Path
 import re
 import time
 from typing import Any, cast
+import sys
 
 import aiofiles
 from aiofiles import os as aos
@@ -33,6 +35,11 @@ _LOGGER = logging.getLogger(__name__)
 _COOKIE_RE = re.compile(r"^set-cookie: ", re.IGNORECASE)
 
 STORAGE_DIRECTORY = "ufp"
+
+if sys.version_info[:2] < (3, 13):
+    # See: https://github.com/python/cpython/issues/112713
+    cookies.Morsel._reserved["partitioned"] = "partitioned"
+    cookies.Morsel._flags.add("partitioned")
 
 
 def get_user_hash(
@@ -481,22 +488,15 @@ class UnifiOSClient:
                 )
             return
 
-        # token_cookie = response.cookies.get(await self.get_auth_cookie_name())
-        # TODO: This is a hack to work around: https://github.com/python/cpython/issues/112713
-        token_cookie = None
-        cookies = response.headers.get("Set-Cookie")
-        if not cookies:
-            return
-        for cookie in cookies.split(";"):
-            if "=" not in cookie:
-                # Unifi protect seems to be returning invalid cookies, ignore them
-                continue
-            name, value = cookie.split("=")
-            if name == "TOKEN" or name == "UOS_TOKEN":
-                self._auth_cookie_name = name
-                token_cookie = Morsel()
-                token_cookie.set(name, value, str(value))
+        # If this is the first time we are seeing the cookie, figure out its name
+        if self._auth_cookie_name is None:
+            cookies = response.headers.get("Set-Cookie")
+            for name, value in [c.split("=") for c in cookies.split(";") if "=" in c]:
+                if name in ["TOKEN", "UOS_TOKEN"]:
+                    self._auth_cookie_name = name
+                    break
 
+        token_cookie = response.cookies.get(self._auth_cookie_name)
         if token_cookie and token_cookie != self._last_token_cookie:
             self._last_token_cookie = token_cookie
             self._last_token_cookie_decode = None
