@@ -38,8 +38,8 @@ STORAGE_DIRECTORY = "ufp"
 
 if sys.version_info[:2] < (3, 13):
     # See: https://github.com/python/cpython/issues/112713
-    cookies.Morsel._reserved["partitioned"] = "partitioned"
-    cookies.Morsel._flags.add("partitioned")
+    cookies.Morsel._reserved["partitioned"] = "partitioned"  # type: ignore
+    cookies.Morsel._flags.add("partitioned")  # type: ignore
 
 
 def get_user_hash(
@@ -59,6 +59,7 @@ def get_user_hash(
 class SessionDict(TypedDict):
     auth_cookie: SimpleCookie
     csrf_token: str | None
+    cookie_name: str
 
 
 class SessionCache:
@@ -491,11 +492,15 @@ class UnifiOSClient:
         # If this is the first time we are seeing the cookie, figure out its name
         if self._auth_cookie_name is None:
             cookies = response.headers.get("Set-Cookie")
+            if not cookies:
+                return
             for name, _value in [c.split("=") for c in cookies.split(";") if "=" in c]:
-                if name in {"TOKEN", "UOS_TOKEN"}:
+                if name and name in {"TOKEN", "UOS_TOKEN"}:
                     self._auth_cookie_name = name
                     break
 
+        if not self._auth_cookie_name:
+            return
         token_cookie = response.cookies.get(self._auth_cookie_name)
         if token_cookie and token_cookie != self._last_token_cookie:
             self._last_token_cookie = token_cookie
