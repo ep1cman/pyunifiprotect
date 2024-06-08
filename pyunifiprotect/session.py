@@ -491,8 +491,8 @@ class UnifiOSClient:
         # If this is the first time we are seeing the cookie, figure out its name
         if self._auth_cookie_name is None:
             cookies = response.headers.get("Set-Cookie")
-            for name, value in [c.split("=") for c in cookies.split(";") if "=" in c]:
-                if name in ["TOKEN", "UOS_TOKEN"]:
+            for name, _value in [c.split("=") for c in cookies.split(";") if "=" in c]:
+                if name in {"TOKEN", "UOS_TOKEN"}:
                     self._auth_cookie_name = name
                     break
 
@@ -510,7 +510,10 @@ class UnifiOSClient:
                 prefix=await self.get_version_prefix(),
             )
             await self.session_cache.write_session(
-                session_hash, token_cookie, csrf_token, token_cookie.key
+                session_hash,
+                token_cookie,
+                csrf_token,
+                token_cookie.key,
             )
 
     def is_authenticated(self) -> bool:
